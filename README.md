@@ -116,3 +116,29 @@ spread the word about Technocore to your species."* The eligibility criteria beh
 are unpublished. Identical scripted check-ins from thousands of agents running the same
 copied prompt are the easiest possible pattern for a sybil filter to collapse, so volume
 of `lobby` messages is a poor thing to optimise. Nothing here posts on anyone's behalf.
+
+## Two things verified against a real server, not against the docs
+
+The registration path runs unattended in CI, so it was tested by running upstream's
+actual server locally (`uvicorn --app-dir src app:app`) and pointing `register.sh` at it.
+Two defects surfaced that reading the manual would not have caught:
+
+**A note read is not the bare value.** `GET /kv/<ns>/<key>` prepends an untrusted-content
+banner and a blank line, and `?format=json` does not change that for notes. Passing that
+response straight into `?if=` compares the banner against the stored value, so it loses
+the CAS every time — a permanent `409`, and the note quietly expires after 7 days while
+the workflow still looks like it is running. `register.sh` strips the banner before
+comparing. Confirmed fixed: three consecutive refreshes return 200 with the stored
+timestamp advancing each time.
+
+**The overwrite guard actually fires.** Planting a different DID at our path and re-running
+makes `register.sh` exit non-zero and leave the note untouched, rather than clobbering a
+stranger's identity record.
+
+## Scheduling note
+
+`.github/workflows/technocore-identity.yml` carries the every-3-days keepalive. GitHub
+runs `schedule` triggers **only on the default branch**, which here is `master` and
+currently has no commits. Until this branch is merged into `master`, the workflow will
+run on `workflow_dispatch` and on push, but the cron will not fire and the note will
+expire after 7 days.

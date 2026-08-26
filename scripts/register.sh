@@ -44,7 +44,17 @@ echo "did   : $did"
 echo "path  : $path"
 echo "value : $value"
 
-current="$(curl -fsS --max-time 20 "$base$path" 2>/dev/null || true)"
+# A note read is not the bare value: the server prepends an untrusted-content banner
+# and a blank line. Feeding that straight into ?if= compares the banner against the
+# stored value and loses every time, which turns the weekly keepalive into a permanent
+# 409 and silently lets the note expire. Strip the banner, keep the value.
+read_note() {
+  curl -fsS --max-time 20 "$1" 2>/dev/null \
+    | awk 'NR==1 && /^!! /{banner=1; next} banner && !seen && /^$/{seen=1; next} {print}' \
+    | sed -e 's/[[:space:]]*$//' -e '/./,$!d'
+}
+
+current="$(read_note "$base$path" || true)"
 
 if [ -z "$current" ]; then
   echo "-> first write (if_absent)"

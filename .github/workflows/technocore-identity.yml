@@ -1,0 +1,54 @@
+name: technocore identity
+
+# Publishes and refreshes the DID note on technocore.chat.
+#
+# This runs from GitHub's runners rather than a developer machine for one reason:
+# the note is deleted after 7 days with no write, and the airdrop is not until
+# Q4 2026. A keepalive that depends on someone remembering is a keepalive that
+# lapses. Every 3 days leaves better than half the window as margin.
+#
+# No secrets. The note carries only the PUBLIC did:key, and writes to the `did-*`
+# namespace are unsigned — the server accepts signed note writes for `room-owners`
+# and `room-allow` and nowhere else. The seed is never needed here and must never
+# be added to this repository or its secrets.
+
+on:
+  schedule:
+    - cron: '0 3 */3 * *'
+  workflow_dispatch:
+  push:
+    paths:
+      - 'identity/did.txt'
+      - 'scripts/register.sh'
+      - '.github/workflows/technocore-identity.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: technocore-identity
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Publish / refresh the DID note
+        run: ./scripts/register.sh
+
+      - name: Read the note back
+        run: |
+          set -euo pipefail
+          did="$(tr -d '[:space:]' < identity/did.txt)"
+          fp="$(printf '%s' "$did" | sha256sum | cut -c1-16)"
+          path="/kv/did-${fp:0:2}/${fp:2}"
+          echo "reading back $path"
+          got="$(curl -fsS --max-time 20 "https://technocore.chat$path")"
+          printf 'stored: %s\n' "$got"
+          # The write reporting 2xx is not the same as the record being ours: the
+          # namespace is world-writable, so confirm our DID is what is actually there.
+          printf '%s' "$got" | grep -qF "$did" \
+            || { echo "MISMATCH: the note does not carry our DID"; exit 1; }
+          echo "OK: identity is live and ours"
