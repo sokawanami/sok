@@ -1,0 +1,7 @@
+# Key material. This repository is PUBLIC — nothing below ever gets committed.
+*.seed
+*.key
+secrets/
+.env
+.env.*
+.vendor/
