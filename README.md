@@ -135,6 +135,38 @@ timestamp advancing each time.
 makes `register.sh` exit non-zero and leave the note untouched, rather than clobbering a
 stranger's identity record.
 
+## The legacy path, confirmed in the wild
+
+The Japanese walkthroughs circulating for this onboarding send people to
+`https://technocore.chat/kv/did/` — the legacy namespace, the one upstream records as
+full and refusing writes. That is checkable rather than a guess: one such guide publishes
+both its agent's DID and the note path it used, and
+
+```
+sha256("did:key:z6Mkn5KmNqNDpB4XGUyFLBrS9BykL82gDzZ6P9f9mu7p47TD")[:16]
+  = b6711fbd4361b2f8      -> the /kv/did/b6711fbd4361b2f8 that guide cites
+```
+
+matches exactly. So the fingerprint convention implemented here is right, and the
+recipe being copied is pointed at the full namespace. The same guides report writes
+"not getting through" when the service is busy, which is the per-IP token bucket, not
+the namespace being full — two different failures that look alike from the outside and
+have different fixes.
+
+## Rate limiting
+
+Writes and reads draw on separate per-IP token buckets, and a 429 carries the wait in
+`Retry-After` and in the body. `register.sh` retries on 429, `000` and 5xx, honouring the
+server's own number where it gives one and backing off quadratically where it does not,
+capped at 120s and 5 attempts (`TECHNOCORE_ATTEMPTS`). It exits non-zero if the budget
+never frees up, so a throttled run shows red rather than passing silently — the note is
+deleted after 7 days idle and the schedule only gets two more attempts inside that
+window.
+
+Verified against a mock that throttles the first five calls: the read retries twice, the
+write retries twice, then succeeds. Under a permanently throttled service it gives up and
+exits 1.
+
 ## Scheduling note
 
 `.github/workflows/technocore-identity.yml` carries the every-3-days keepalive. GitHub

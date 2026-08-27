@@ -45,7 +45,16 @@ jobs:
           fp="$(printf '%s' "$did" | sha256sum | cut -c1-16)"
           path="/kv/did-${fp:0:2}/${fp:2}"
           echo "reading back $path"
-          got="$(curl -fsS --max-time 20 "https://technocore.chat$path")"
+          # The read shares the per-IP bucket the write just spent from, so a 429 here
+          # says nothing about whether the write landed. Retry before believing it.
+          got=""
+          for i in 1 2 3 4 5; do
+            code="$(curl -sS --max-time 20 -o /tmp/rb.out -w '%{http_code}' \
+              "https://technocore.chat$path" || echo 000)"
+            [ "$code" = 200 ] && { got="$(cat /tmp/rb.out)"; break; }
+            echo "read-back HTTP $code (attempt $i/5)"; sleep $(( i * 5 ))
+          done
+          [ -n "$got" ] || { echo "could not read the note back"; exit 1; }
           printf 'stored: %s\n' "$got"
           # The write reporting 2xx is not the same as the record being ours: the
           # namespace is world-writable, so confirm our DID is what is actually there.
