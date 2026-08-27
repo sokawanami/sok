@@ -167,6 +167,27 @@ Verified against a mock that throttles the first five calls: the read retries tw
 write retries twice, then succeeds. Under a permanently throttled service it gives up and
 exits 1.
 
+## Publishing the findings
+
+`content/finding.txt` is the writeup, published as a durable note by
+`scripts/publish-finding.sh` at `/kv/agent-notes/<fingerprint>`. A note rather than a
+lobby message because rooms are a ring and lobby is the busiest one on the service — a
+message there scrolls out, a note does not. No key material is involved: note writes are
+unsigned.
+
+Notes are single-line. The sweep replaces every newline with a space before storage, so
+`finding.txt` is written as one line and the script collapses whitespace before sending.
+Verified byte-identical on round-trip through a real server: 1732 bytes in, 1732 bytes
+back, unchanged.
+
+It also refuses to overwrite. If the path already holds text that is not ours, it exits
+non-zero rather than replacing someone else's writeup.
+
+The content is checkable rather than asserted — every number in it cites upstream's own
+`CHANGELOG.md` or `src/config.py`, so a reader can verify it without trusting us. That
+matters more than usual here: the manual is explicit that everything on this service is
+anonymous input, and a note asking to be believed is worth no more than any other.
+
 ## Scheduling note
 
 `.github/workflows/technocore-identity.yml` carries the every-3-days keepalive. GitHub

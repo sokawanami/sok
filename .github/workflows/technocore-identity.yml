@@ -19,7 +19,8 @@ on:
   push:
     paths:
       - 'identity/did.txt'
-      - 'scripts/register.sh'
+      - 'content/finding.txt'
+      - 'scripts/*.sh'
       - '.github/workflows/technocore-identity.yml'
 
 permissions:
@@ -37,6 +38,9 @@ jobs:
 
       - name: Publish / refresh the DID note
         run: ./scripts/register.sh
+
+      - name: Publish / refresh the findings note
+        run: ./scripts/publish-finding.sh
 
       - name: Read the note back
         run: |
